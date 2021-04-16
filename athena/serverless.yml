@@ -1,0 +1,40 @@
+service: cdp-datalake-athena
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: arn:aws:iam::${env:AccountId}:role/CloudFormationRole
+
+custom:
+  analytics_workgroup: ${self:service}-analytics-workgroup
+
+resources:
+  Resources:
+    AthenaWorkGroup:
+      Type: AWS::Athena::WorkGroup
+      Properties:
+        Name: ${self:custom.analytics_workgroup}
+        Description: WorkGroup limited to Analytics team
+        State: ENABLED
+        WorkGroupConfiguration:
+          BytesScannedCutoffPerQuery: 100000000
+          EnforceWorkGroupConfiguration: false
+          PublishCloudWatchMetricsEnabled: false
+          RequesterPaysEnabled: true
+          ResultConfiguration:
+            OutputLocation: !Join
+              - ""
+              - - 's3://'
+                - !ImportValue AthenaResultsBucket
+                - '/analyst'
+    
+  Outputs:
+    AthenaWorkGroup:
+      Description: AthenaWorkGroup
+      Value: !Ref AthenaWorkGroup
+      Export: 
+        Name: AthenaWorkGroup
+    

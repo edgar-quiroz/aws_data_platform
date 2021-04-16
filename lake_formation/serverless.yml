@@ -1,0 +1,32 @@
+service: cdp-datalake-lakeformation
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: 'arn:aws:iam::${env:AccountId}:role/CloudFormationRole'
+
+resources:
+  Resources:
+    LakeformationSettings:
+      Type: AWS::LakeFormation::DataLakeSettings
+      Properties: 
+        Admins: 
+          - DataLakePrincipalIdentifier: 'arn:aws:iam::${env:AccountId}:user/Admin'
+
+    # This buckets must exists before deploy
+    RawDatalakeLocation:
+      Type: AWS::LakeFormation::Resource
+      Properties: 
+        ResourceArn: !ImportValue RawBucketArn
+        RoleArn: !ImportValue GlueETLRoleArn
+        UseServiceLinkedRole: false
+
+    CuratedDatalakeLocation:
+      Type: AWS::LakeFormation::Resource
+      Properties: 
+        ResourceArn: !ImportValue CuratedBucketArn
+        RoleArn: !ImportValue GlueETLRoleArn
+        UseServiceLinkedRole: false

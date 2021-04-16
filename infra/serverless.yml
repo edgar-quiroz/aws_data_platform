@@ -1,0 +1,117 @@
+service: cdp-datalake-infra
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: arn:aws:iam::${env:AccountId}:role/CloudFormationRole
+
+custom:
+  kafka_sg: ${self:service}-kafka-sg
+  network_connection: ${self:service}-network-connection
+  kafka_connection: ${self:service}-kafka-connection
+
+resources:
+  Resources:
+    KafkaSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: SG for kafka communication
+        GroupName: ${self:custom.kafka_sg}
+        SecurityGroupIngress:
+          - CidrIp: 0.0.0.0/0
+            Description: ssh connection
+            IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+          - CidrIp: !ImportValue VPCCIDR
+            Description: Allow all trafic from same vpc
+            IpProtocol: -1
+        VpcId: !ImportValue VPC
+    
+    S3Endpoint:
+      Type: AWS::EC2::VPCEndpoint
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal: '*'
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+              Resource:
+                - arn:aws:s3:::cdp-*/*
+                - arn:aws:s3:::aws-glue-*/*
+            - Effect: Allow
+              Principal: '*'
+              Action:
+                - s3:ListBucket
+              Resource: '*'
+        RouteTableIds:
+          - !ImportValue PublicRouteTable
+        ServiceName: !Sub 'com.amazonaws.us-east-1.s3'
+        # SubnetIds:
+        #   - !ImportValue PublicSubnet1A
+        VpcId: !ImportValue VPC
+        
+    NetworkConnection:
+      Type: AWS::Glue::Connection
+      Properties: 
+        CatalogId: !Ref AWS::AccountId
+        ConnectionInput: 
+          ConnectionType: NETWORK
+          Description: NETWORK connection
+          Name: ${self:custom.network_connection}
+          PhysicalConnectionRequirements: 
+            AvailabilityZone: 'us-east-1a'
+            SecurityGroupIdList: 
+              - !Ref KafkaSecurityGroup
+            SubnetId: !ImportValue PublicSubnet1A
+
+    GlueKafkaConnection:
+      Type: AWS::Glue::Connection
+      Properties: 
+        CatalogId: !Ref AWS::AccountId
+        ConnectionInput: 
+          ConnectionProperties: 
+            "KAFKA_BOOTSTRAP_SERVERS": "server1:9092,server2:9092"
+            #KAFKA_SSL_ENABLED, KAFKA_CUSTOM_CERT, KAFKA_SKIP_CUSTOM_CERT_VALIDATION
+            #https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-catalog-connections.html
+          ConnectionType: KAFKA
+          Description: Kafka connection
+          Name: ${self:custom.kafka_connection}
+          PhysicalConnectionRequirements: 
+            AvailabilityZone: 'us-east-1a'
+            SecurityGroupIdList: 
+              - !Ref KafkaSecurityGroup
+            SubnetId: !ImportValue PublicSubnet1A
+    
+  Outputs:
+    KafkaSecurityGroup:
+      Description: KafkaSecurityGroup
+      Value: !Ref KafkaSecurityGroup
+      Export: 
+        Name: KafkaSecurityGroup
+    NetworkConnection:
+      Description: NetworkConnection
+      Value: !Ref NetworkConnection
+      Export: 
+        Name: NetworkConnection
+    GlueKafkaConnection:
+      Description: GlueKafkaConnection
+      Value: !Ref GlueKafkaConnection
+      Export: 
+        Name: GlueKafkaConnection
+
+
+
+
+  
+
+
+
+    

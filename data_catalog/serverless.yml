@@ -1,0 +1,225 @@
+service: cdp-datalake-datacatalog
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: arn:aws:iam::${env:AccountId}:role/CloudFormationRole
+
+custom:
+  database: ${self:service}-company-database
+  streaming_database: ${self:service}-streaming-database
+  employees_table: employees
+  kafka_table: kafka-employees
+  company_crawler: cdp-company-crawler
+
+resources:
+  Resources:
+    CompanyDatabase:
+      Type: AWS::Glue::Database
+      Properties:
+        CatalogId: !Ref AWS::AccountId
+        DatabaseInput:
+          Name: ${self:custom.database}
+          Description: String
+
+    # EmployeeRawTable:
+    #   DependsOn: CompanyDatabase
+    #   Type: AWS::Glue::Table
+    #   Properties:
+    #     CatalogId: !Ref AWS::AccountId
+    #     DatabaseName: !Ref CompanyDatabase
+    #     TableInput:
+    #       Name: ${self:custom.employees_table}
+    #       Description: Table to store employees information
+    #       Owner: owner
+    #       Retention: 0
+    #       TableType: EXTERNAL_TABLE
+    #       Parameters:
+    #         CrawlerSchemaDeserializerVersion: 1.0
+    #         compressionType: none
+    #         classification: csv
+    #         typeOfData: file
+    #         CrawlerSchemaSerializerVersion: 1.0
+    #         columnsOrdered: true
+    #         objectCount: 1
+    #         delimiter: ","
+    #       StorageDescriptor:
+    #         StoredAsSubDirectories: false
+    #         InputFormat: "org.apache.hadoop.mapred.TextInputFormat"
+    #         OutputFormat: "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+    #         SerdeInfo:
+    #           Parameters:
+    #             field.delim: ","
+    #           SerializationLibrary: "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"
+    #         Compressed: false
+    #         Location: !Join
+    #           - ""
+    #           - - 's3://'
+    #             - !ImportValue RawBucket
+    #             - '/company/employees'
+    #         Columns:
+    #           - Name: id
+    #             Type: string
+    #             Comment: employee identifier
+    #           - Name: first_name
+    #             Type: string
+    #             Comment: employee first name
+    #           - Name: last_name
+    #             Type: string
+    #             Comment: employee last name
+    #           - Name: email
+    #             Type: string
+    #             Comment: employee email
+    
+    # Curated
+    EmployeeTable:
+      DependsOn: CompanyDatabase
+      Type: AWS::Glue::Table
+      Properties:
+        CatalogId: !Ref AWS::AccountId
+        DatabaseName: !Ref CompanyDatabase
+        TableInput:
+          Name: ${self:custom.employees_table}
+          Description: Table to store employees information
+          Owner: owner
+          Retention: 0
+          TableType: EXTERNAL_TABLE
+          Parameters:
+            compressionType: none
+            classification: parquet
+            #connectionName: {Ref: NetworkConnection}
+          StorageDescriptor:
+            StoredAsSubDirectories: false
+            InputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+            OutputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+            #BucketColumns: []
+            #NumberOfBuckets: -1
+            SerdeInfo:
+              SerializationLibrary: "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+              Parameters:
+                "serialization.format": "1"
+            Compressed: false
+            Location: !Join
+              - ""
+              - - 's3://'
+                - !ImportValue CuratedBucket
+                - '/company/employees'
+            Columns:
+              - Name: id
+                Type: int
+                Comment: employee identifier
+              - Name: first_name
+                Type: string
+                Comment: employee first name
+              - Name: last_name
+                Type: string
+                Comment: employee last name
+              - Name: email
+                Type: string
+                Comment: employee email
+
+    EmployeeTableGrants:
+      Type: AWS::LakeFormation::Permissions
+      Properties:
+        DataLakePrincipal:
+          DataLakePrincipalIdentifier: !ImportValue GlueETLRoleArn
+        Permissions:
+          - ALTER
+          - DROP
+          - DESCRIBE
+          - SELECT
+          - INSERT
+          - DELETE
+        Resource:
+          TableResource:
+            DatabaseName: !Ref CompanyDatabase
+            Name: !Ref EmployeeTable
+
+
+    #Streaming
+    StreamingDatabase:
+      Type: AWS::Glue::Database
+      Properties:
+        CatalogId: !Ref AWS::AccountId
+        DatabaseInput:
+          Name: ${self:custom.streaming_database}
+          Description: Database to hold streaming data
+
+    KafkaTable:
+      Type: AWS::Glue::Table
+      Properties:
+        CatalogId: !Ref AWS::AccountId
+        DatabaseName: !Ref StreamingDatabase
+        TableInput:
+          Name: ${self:custom.kafka_table}
+          Parameters: 
+            "classification": "json"
+          Retention: 24
+          StorageDescriptor:
+            Parameters: 
+              #"connection": {Ref: GlueKafkaConnection}
+              "topicName": "demo"
+              "typeOfData": "kafka"
+              "bootstrap.servers": "server1:9092,server2:9092"
+            Columns:
+              - Name: id
+                Type: int
+                Comment: employee identifier
+              - Name: first_name
+                Type: string
+                Comment: employee first name
+              - Name: last_name
+                Type: string
+                Comment: employee last name
+              - Name: email
+                Type: string
+                Comment: employee email
+            InputFormat: TextInputFormat
+            OutputFormat: HiveIgnoreKeyTextOutputFormat
+            SerdeInfo:
+              Parameters: {"paths": "product_id,item_price,timestamp"}
+              SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
+    
+    KafkaTableGrants:
+      Type: AWS::LakeFormation::Permissions
+      Properties:
+        DataLakePrincipal:
+          DataLakePrincipalIdentifier: !ImportValue GlueETLRoleArn
+        Permissions:
+          - ALTER
+          - DROP
+          - DESCRIBE
+          - SELECT
+          - INSERT
+          - DELETE
+        Resource:
+          TableResource:
+            DatabaseName: !Ref StreamingDatabase
+            Name: !Ref KafkaTable
+  
+  Outputs:
+    CompanyDatabase:
+      Description: CompanyDatabase
+      Value: !Ref CompanyDatabase
+      Export: 
+        Name: CompanyDatabase
+    EmployeeTable:
+      Description: EmployeeTable
+      Value: !Ref EmployeeTable
+      Export: 
+        Name: EmployeeTable
+    StreamingDatabase:
+      Description: StreamingDatabase
+      Value: !Ref StreamingDatabase
+      Export: 
+        Name: StreamingDatabase
+    KafkaTable:
+      Description: KafkaTable
+      Value: !Ref KafkaTable
+      Export: 
+        Name: KafkaTable
+
+

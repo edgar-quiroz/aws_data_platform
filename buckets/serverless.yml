@@ -1,0 +1,106 @@
+service: cdp-datalake-buckets
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: arn:aws:iam::${env:AccountId}:role/CloudFormationRole
+
+custom:
+  raw_bucket: ${self:service}-raw-bucket
+  curated_bucket: ${self:service}-curated-bucket
+  athena_results_bucket: ${self:service}-athena-results-bucket
+
+resources:
+  Resources:
+    # Athena results
+    AthenaResultsBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      Properties:
+        AccessControl: Private
+        BucketName: ${self:custom.athena_results_bucket}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+
+    RawBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      Properties:
+        AccessControl: Private
+        BucketName: ${self:custom.raw_bucket}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        LifecycleConfiguration:
+          Rules:
+            - Id: StandardIARule
+              Status: Enabled
+              Transitions:
+                - TransitionInDays: '365'
+                  StorageClass: STANDARD_IA
+            - Id: GlacierRule
+              Status: Enabled
+              Transitions:
+                - TransitionInDays: '1825'
+                  StorageClass: GLACIER
+
+    CuratedBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      Properties:
+        AccessControl: Private
+        BucketName: ${self:custom.curated_bucket}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        LifecycleConfiguration:
+          Rules:
+            - Id: StandardIARule
+              Status: Enabled
+              Transitions:
+                - TransitionInDays: '365'
+                  StorageClass: STANDARD_IA
+            - Id: GlacierRule
+              Status: Enabled
+              Transitions:
+                - TransitionInDays: '1825'
+                  StorageClass: GLACIER
+
+  Outputs:
+    AthenaResultsBucket:
+      Description: AthenaResultsBucket
+      Value: !Ref AthenaResultsBucket
+      Export: 
+        Name: AthenaResultsBucket
+    RawBucket:
+      Description: RawBucket
+      Value: !Ref RawBucket
+      Export: 
+        Name: RawBucket
+    CuratedBucket:
+      Description: CuratedBucket
+      Value: !Ref CuratedBucket
+      Export: 
+        Name: CuratedBucket
+    AthenaResultsBucketArn:
+      Description: AthenaResultsBucketArn
+      Value: !GetAtt AthenaResultsBucket.Arn
+      Export: 
+        Name: AthenaResultsBucketArn
+    RawBucketArn:
+      Description: RawBucketArn
+      Value: !GetAtt RawBucket.Arn
+      Export: 
+        Name: RawBucketArn
+    CuratedBucketArn:
+      Description: CuratedBucketArn
+      Value: !GetAtt CuratedBucket.Arn
+      Export: 
+        Name: CuratedBucketArn

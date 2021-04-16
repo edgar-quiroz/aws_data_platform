@@ -1,0 +1,45 @@
+service: cdp-datalake-dataperms
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: arn:aws:iam::${env:AccountId}:role/CloudFormationRole
+
+resources:
+  Resources:
+    CompanyDatabaseGrants:
+      Type: AWS::LakeFormation::Permissions
+      Properties:
+        DataLakePrincipal:
+          DataLakePrincipalIdentifier: "arn:aws:iam::${env:AccountId}:user/Admin"
+        Permissions:
+          - ALTER
+          - DROP
+          - DESCRIBE
+          - SELECT
+          - INSERT
+          - DELETE
+        Resource:
+          TableResource:
+            DatabaseName: !ImportValue CompanyDatabase
+            Name: !ImportValue EmployeeTable
+    
+    KafkaTableGrants:
+      Type: AWS::LakeFormation::Permissions
+      Properties:
+        DataLakePrincipal:
+          DataLakePrincipalIdentifier: "arn:aws:iam::${env:AccountId}:user/Admin"
+        Permissions:
+          - ALTER
+          - DROP
+          - DESCRIBE
+          - SELECT
+          - INSERT
+          - DELETE
+        Resource:
+          TableResource:
+            DatabaseName: !ImportValue StreamingDatabase
+            Name: !ImportValue KafkaTable

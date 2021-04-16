@@ -1,0 +1,49 @@
+service: cdp-datalake-jobs
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: arn:aws:iam::${env:AccountId}:role/CloudFormationRole
+
+custom:
+  kafka_job: ${self:service}-kafka-job
+
+resources:
+  Resources:
+    StreamingJob:
+      Type: AWS::Glue::Job
+      Properties:
+        Name: ${self:custom.kafka_job}
+        Role: !ImportValue GlueETLRoleArn
+        GlueVersion: "2.0"
+        #MaxCapacity: 2.0
+        Connections:
+          Connections:
+            - !ImportValue GlueKafkaConnection 
+            - !ImportValue NetworkConnection 
+        MaxRetries: 0
+        NumberOfWorkers: 2
+        WorkerType: G.1X
+        ExecutionProperty:
+          MaxConcurrentRuns: 1
+        Command:
+          Name: gluestreaming
+          PythonVersion: 3
+          ScriptLocation: 's3://aws-glue-assets-${env:AccountId}-us-east-1/scripts/job.py'
+        DefaultArguments:
+          "--job-language": python
+          "--class": GlueApp
+          "--TempDir": 's3://aws-glue-assets-${env:AccountId}-us-east-1/tmp/'
+          "--job-bookmark-option": job-bookmark-enable
+          # "--STAGE": 'dev'
+          # "--STREAM_NAME": !Sub '${StreamName}'
+          # "--BUCKET_NAME": !Sub '${ResourceBucketName}'
+          # "--DATABASE_NAME": !Sub '${DatabaseName}'
+          # "--TABLE_NAME": !Sub '${TableName}'
+          # "--JOB_ROLE": !Ref MyJobRole
+          # "--ACCESS_KEY": 'none'
+          # "--SECRET_KEY": 'none'
+      
