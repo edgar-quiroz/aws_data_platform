@@ -1,0 +1,162 @@
+service: VPC
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: 'arn:aws:iam::${env:AccountId}:role/CloudFormationRole'
+  
+custom:
+  vpc_cidr_block: 10.0.0.0/16
+  public_subnet_a_cidr_block: 10.0.1.0/24
+  public_subnet_b_cidr_block: 10.0.2.0/24
+  public_subnet_c_cidr_block: 10.0.3.0/24
+
+resources:
+ Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: ${self:custom.vpc_cidr_block}
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: 'cdp:resource-type'
+          Value: 'VPC'
+        - Key: 'cdp:resource-name'
+          Value: 'CDP VPC'
+        - Key: 'Name'
+          Value: 'CDP VPC'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: 'cdp:resource-type'
+          Value: 'Internet Gateway'
+        - Key: 'cdp:resource-name'
+          Value: 'CDP IGW'
+        - Key: 'Name'
+          Value: 'CDP IGW'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+   
+  PublicSubnet1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: 'us-east-1a'
+      CidrBlock: ${self:custom.public_subnet_a_cidr_block}
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'cdp:resource-type'
+          Value: 'Subnet'
+        - Key: 'cdp:resource-name'
+          Value: 'CDP publuc subnet us-east-1a'
+        - Key: 'Name'
+          Value: 'CDP publuc subnet us-east-1a'
+
+  PublicSubnet1B:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: 'us-east-1b'
+      CidrBlock: ${self:custom.public_subnet_b_cidr_block}
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'cdp:resource-type'
+          Value: 'Subnet'
+        - Key: 'cdp:resource-name'
+          Value: 'CDP publuc subnet us-east-1b'
+        - Key: 'Name'
+          Value: 'CDP publuc subnet us-east-1b'
+
+  PublicSubnet1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: 'us-east-1c'
+      CidrBlock: ${self:custom.public_subnet_c_cidr_block}
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'cdp:resource-type'
+          Value: 'Subnet'
+        - Key: 'cdp:resource-name'
+          Value: 'CDP publuc subnet us-east-1c'
+        - Key: 'Name'
+          Value: 'CDP publuc subnet us-east-1c'
+      
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: 'cdp:resource-type'
+          Value: 'RouteTable'
+        - Key: 'cdp:resource-name'
+          Value: 'CDP route table'
+        - Key: 'Name'
+          Value: 'CDP route table'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      
+  PublicSubnet1ARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1A
+  
+  PublicSubnet1BRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1B
+  
+  PublicSubnet1CRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1C
+
+ Outputs:
+    VPC:
+      Description: "Account VPC"
+      Value: !Ref VPC
+      Export:
+        Name: VPC
+    VPCCIDR:
+      Description: "Account VPC CIDR BLOCK"
+      Value: !GetAtt VPC.CidrBlock
+      Export:
+        Name: VPCCIDR
+    InternetGateway:
+      Description: 'Account internet gateway'
+      Value: !Ref InternetGateway
+    PublicSubnet1A:
+      Description: 'Account public subnet'
+      Value: !Ref PublicSubnet1A
+      Export:
+        Name: PublicSubnet1A
+    PublicSubnet1B:
+      Description: 'Account public subnet'
+      Value: !Ref PublicSubnet1B
+      Export:
+        Name: PublicSubnet1B
+    PublicRouteTable:
+      Description: 'Account public route table'
+      Value: !Ref PublicRouteTable
+      Export:
+        Name: PublicRouteTable

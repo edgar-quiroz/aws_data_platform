@@ -1,0 +1,352 @@
+service: IAM
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  stackName: ${self:service}-stack
+  deploymentPrefix: ${self:service}
+  cfnRole: 'arn:aws:iam::${env:AccountId}:role/CloudFormationRole'
+
+resources:
+  Resources:
+    # Stack deployment
+    CloudFormationPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        ManagedPolicyName: CloudFormationPolicy
+        Path: '/'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: S3BucketPermissions
+              Effect: Allow
+              Action:
+                - s3:*Bucket*
+                - s3:*Encryption*
+                - s3:PutLifecycleConfiguration
+                - s3:GetLifecycleConfiguration
+              Resource: 
+                - arn:aws:s3:::*serverlessdeploy*
+                - arn:aws:s3:::cdp-*
+            - Sid: S3ObjectPermissions
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:DeleteObject
+              Resource: 
+                - arn:aws:s3:::*serverlessdeploy*/*
+                - arn:aws:s3:::*cdp-*/*
+            - Sid: LakeformationPermissions
+              Effect: Allow
+              Action:
+                - lakeformation:PutDataLakeSettings
+                - lakeformation:GetDataLakeSettings
+                - lakeformation:GrantPermissions
+                - lakeformation:RevokePermissions
+                - lakeformation:BatchGrantPermissions
+                - lakeformation:BatchRevokePermissions
+                - lakeformation:RegisterResource 
+                - lakeformation:DeregisterResource
+              Resource: '*'
+            - Sid: PassRoles
+              Effect: Allow
+              Action:
+                - iam:PassRole
+                - iam:GetRole
+              Resource:
+                - arn:aws:iam::${env:AccountId}:role/GlueETLRole
+            - Sid: GluePermissions
+              Effect: Allow
+              Action:
+                - glue:CreateDatabase
+                - glue:DeleteDatabase
+                - glue:UpdateDatabase
+                - glue:GetDatabases
+                - glue:GetDatabase
+                - glue:CreateCrawler
+                - glue:DeleteCrawler
+                - glue:UpdateCrawler
+                - glue:StartCrawler
+                - glue:StopCrawler
+                - glue:GetCrawler
+                - glue:CreateTable
+                - glue:DeleteTable
+                - glue:UpdateTable
+                - glue:GetTables
+                - glue:GetTable
+                - glue:GetTableVersions
+                - glue:GetTableVersion
+                - glue:SearchTables
+                - glue:GetPartitions
+                - glue:GetPartition
+                - glue:CreateConnection
+                - glue:DeleteConnection
+                - glue:UpdateConnection
+                - glue:GetConnections
+                - glue:GetConnection
+                - glue:CreateJob
+                - glue:DeleteJob
+                - glue:UpdateJob
+                - glue:GetJobs
+                - glue:GetJob
+                - glue:GetJobRuns
+                - glue:GetJobRun
+              Resource: 
+                - arn:aws:glue:us-east-1:${env:AccountId}:crawler/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:database/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:table/*
+                - arn:aws:glue:us-east-1:${env:AccountId}:catalog
+                - arn:aws:glue:us-east-1:${env:AccountId}:userDefinedFunction/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:connection/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:job/cdp-*
+            - Sid: AthenaWorkGroupPermissions
+              Effect: Allow
+              Action:
+                - athena:DeleteWorkGroup
+                - athena:CreateWorkGroup
+                - athena:UpdateWorkGroup
+                - athena:GetWorkGroup
+              Resource: 
+                - arn:aws:athena:us-east-1:${env:AccountId}:workgroup/cdp-*
+            - Sid: EC2Endpoint
+              Effect: Allow
+              Action:
+                - ec2:CreateVpcEndpoint
+                - ec2:DescribeVpcEndpoints
+                - ec2:DeleteVpcEndpoints
+                - ec2:ModifyVpcEndpoint
+              Resource: '*'
+            - Sid: EC2SecurityGroups
+              Effect: Allow
+              Action:
+                - ec2:*SecurityGroup*
+                - ec2:*Tags*
+              Resource: '*'
+
+    CloudFormationRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        RoleName: CloudFormationRole
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: cloudformation.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        ManagedPolicyArns:
+         - !Ref CloudFormationPolicy
+
+    
+    # Jobs deployment
+    GlueETLPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        ManagedPolicyName: GlueETLPolicy
+        Path: '/'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: LakeFormationPermissions
+              Effect: Allow
+              Action:
+                - lakeformation:GetDataAccess
+              Resource: '*'
+            - Sid: GluePermissions
+              Effect: Allow
+              Action:
+                - glue:CreateDatabase
+                - glue:DeleteDatabase
+                - glue:UpdateDatabase
+                - glue:GetDatabases
+                - glue:GetDatabase
+                - glue:CreateTable
+                - glue:DeleteTable
+                - glue:UpdateTable
+                - glue:GetTables
+                - glue:GetTable
+                - glue:DeleteTableVersion
+                - glue:BatchDeleteTable
+                - glue:BatchDeleteTableVersion
+                - glue:CreatePartition
+                - glue:BatchCreatePartition
+                - glue:GetConnections
+                - glue:GetConnection
+                - glue:GetTableVersions
+                - glue:GetTableVersion
+                - glue:SearchTables
+                - glue:GetPartitions
+                - glue:GetPartition
+                - glue:BatchGetPartition
+                - glue:UpdatePartition
+                - glue:DeletePartition
+                - glue:BatchDeletePartition
+                - glue:GetTags
+              Resource:
+                - arn:aws:glue:us-east-1:${env:AccountId}:database/default
+                - arn:aws:glue:us-east-1:${env:AccountId}:database/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:table/cdp*
+                - arn:aws:glue:us-east-1:${env:AccountId}:catalog
+                - arn:aws:glue:us-east-1:${env:AccountId}:userDefinedFunction/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:connection/cdp-*
+            - Sid: GlueAllPermissions
+              Effect: Allow
+              Action:
+                - glue:GetJobBookmark
+                - glue:ResetJobBookmark
+              Resource: '*'
+            - Sid: LogsPermissions
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - logs:AssociateKmsKey
+              Resource: 
+                - arn:aws:logs:us-east-1:${env:AccountId}:log-group:/aws-glue/*
+            - Sid: S3Permissions
+              Effect: Allow
+              Action:
+                - s3:*Object*
+              Resource:
+                - arn:aws:s3:::cdp-*/*
+                - arn:aws:s3:::aws-glue*/*
+                - arn:aws:s3:::*/*aws-glue-*/*
+            - Sid: GenericPermissions
+              Effect: Allow
+              Action:
+                - s3:GetBucketLocation
+                - s3:ListAllMyBuckets
+                - s3:ListBucket
+                - s3:GetBucketAcl
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeRouteTables
+                - ec2:CreateNetworkInterface
+                - ec2:DeleteNetworkInterface				
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DescribeSecurityGroups
+                - ec2:DescribeSubnets
+                - ec2:DescribeVpcAttribute
+                - cloudwatch:PutMetricData
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - ec2:CreateTags
+                - ec2:DeleteTags
+              Condition:
+                ForAllValues:StringEquals:
+                  aws:TagKeys:
+                  - aws-glue-service-resource
+              Resource:
+                - arn:aws:ec2:*:*:network-interface/*
+                - arn:aws:ec2:*:*:security-group/*
+                - arn:aws:ec2:*:*:instance/*
+      
+    GlueETLRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        RoleName: GlueETLRole
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: glue.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        ManagedPolicyArns:
+          - !Ref GlueETLPolicy
+
+    # User policies
+    AdminPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        ManagedPolicyName: AdminPolicy
+        Path: '/'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: AdminPermissions
+              Effect: Allow
+              Action:
+                # - all required admin perms
+              Resource: '*'
+
+    # Standard users with limited resources
+    AnalystPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        ManagedPolicyName: AnalystPolicy
+        Path: '/'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: LakeformationPermissions
+              Effect: Allow
+              Action:
+                - lakeformation:GetDataAccess 
+              Resource: '*'
+            - Sid: GluePermissions
+              Effect: Allow
+              Action:
+                - glue:GetDatabases
+                - glue:GetDatabase
+                - glue:GetTables
+                - glue:GetTable
+                - glue:SearchTables
+                - glue:GetTableVersions
+                - glue:GetPartitions
+              Resource: 
+                - arn:aws:glue:us-east-1:${env:AccountId}:database/cdp-*
+                - arn:aws:glue:us-east-1:${env:AccountId}:table/cdp*
+                - arn:aws:glue:us-east-1:${env:AccountId}:catalog
+                - arn:aws:glue:us-east-1:${env:AccountId}:userDefinedFunction/cdp-*
+            - Sid: AthenaWorkGroupPermissions
+              Effect: Allow
+              Action:
+                - athena:GetWorkGroup
+                - athena:StartQueryExecution
+                - athena:GetQueryResults
+                - athena:GetWorkGroup
+                - athena:CancelQueryExecution
+                - athena:StopQueryExecution
+                - athena:GetQueryExecution
+              Resource: 
+                - arn:aws:athena:us-east-1:${env:AccountId}:workgroup/cdp-*
+            - Sid: AthenaListWorkGroupPermissions
+              Effect: Allow
+              Action:
+                - athena:ListWorkGroups
+              Resource: '*'
+            - Sid: S3ObjectPermissions
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:AbortMultipartUpload
+              Resource:
+                - arn:aws:s3:::*athena-results-bucket/*
+            - Sid: S3ListPermissions
+              Effect: Allow
+              Action:
+                - s3:GetBucketLocation
+                - s3:ListBucket
+                - s3:ListAllMyBuckets
+              Resource: '*'      
+
+  Outputs:
+    CloudFormationRoleArn:
+      Description: Role used for cloudformation deploys
+      Value: !GetAtt CloudFormationRole.Arn
+      Export: 
+        Name: CloudFormationRoleArn
+
+    GlueETLRoleArn:
+      Description: Role used for ECS Services
+      Value: !GetAtt GlueETLRole.Arn
+      Export: 
+        Name: GlueETLRoleArn
+
