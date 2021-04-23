@@ -90,13 +90,10 @@ resources:
           Parameters:
             compressionType: none
             classification: parquet
-            #connectionName: {Ref: NetworkConnection}
           StorageDescriptor:
             StoredAsSubDirectories: false
             InputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
             OutputFormat: "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
-            #BucketColumns: []
-            #NumberOfBuckets: -1
             SerdeInfo:
               SerializationLibrary: "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
               Parameters:
